@@ -67,7 +67,6 @@ def test_main_prints_output(mock_print):
     count_text2.main(urls, download_fn=fake_downloader)
     assert mock_print.call_count >= 1
 
-
 # Not ideal to do real network calls.
 # def test_main_route_runs():
 #     urls = [
