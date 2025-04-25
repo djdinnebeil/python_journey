@@ -1,19 +1,36 @@
 import argparse
 import urllib.request
 import urllib.error
+from urllib.parse import urlparse
 from collections import Counter
 import re
 from multiprocessing import Pool
 import logging
+import sys
 
 # Configure basic logging format and level
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+print_logger = logging.getLogger('print_logger')
+print_handler = logging.StreamHandler(sys.stdout)
+print_handler.setFormatter(logging.Formatter('%(message)s'))
+print_logger.addHandler(print_handler)
+print_logger.setLevel(logging.INFO)
+print_logger.propagate = False
 
 # Default constants
 DEFAULT_MAX_CONTENT_LENGTH = 10_000_000  # Maximum content to read from a URL (in bytes)
 DEFAULT_TIMEOUT_SECONDS = 10             # Timeout for URL requests in seconds
 DEFAULT_TOP_N_WORDS = 152                # Number of top frequent words to display
 DEFAULT_PROCESSES = 8                    # Number of worker processes for multiprocessing
+
+def is_valid_http_url(url):
+    try:
+        result = urlparse(url)
+        return result.scheme in ('http', 'https') and bool(result.netloc)
+    except ValueError:
+        return False
 
 def download_and_count(url):
     """
@@ -25,25 +42,24 @@ def download_and_count(url):
     Returns:
     - Counter: A Counter object mapping words to their frequency in the downloaded content.
     """
+    if not is_valid_http_url(url):
+        logging.error(f'Invalid url: {url}')
+        return Counter()
     try:
-        if not url.startswith(('http://', 'https://')):
-            raise ValueError(f'Unsupported URL scheme: {url}')
-
         response = urllib.request.urlopen(url, timeout=DEFAULT_TIMEOUT_SECONDS)
         content = response.read(DEFAULT_MAX_CONTENT_LENGTH).decode('utf-8', errors='ignore')
-
         # Extract words using a regular expression
         words = re.findall(r'\b\w+\b', content.lower())
         return Counter(words)
 
     except urllib.error.HTTPError as e:
-        print(f'HTTP error for {url}: {e.code} - {e.reason}')
+        logging.error(f'HTTP error for {url}: {e.code} - {e.reason}')
     except urllib.error.URLError as e:
-        print(f'URL error for {url}: {e.reason}')
+        logging.error(f'URL error for {url}: {e.reason}')
     except ValueError as e:
-        print(f'Validation error: {e}')
+        logging.error(f'Validation error: {e}')
     except Exception as e:
-        print(f'Unexpected error processing {url}: {e}')
+        logging.error(f'Unexpected error processing {url}: {e}')
 
     return Counter()
 
@@ -79,9 +95,9 @@ def main(urls, top_n=DEFAULT_TOP_N_WORDS, processes=DEFAULT_PROCESSES, download_
     # Merge all individual counters into one
     total_word_count = merge_counters(counters)
 
-    print(f'\nTop {top_n} most common words:\n')
+    print_logger.info(f'\nTop {top_n} most common words:\n')
     for word, count in total_word_count.most_common(top_n):
-        print(f'{word}: {count}')
+        print_logger.info(f'{word}: {count}')
 
 if __name__ == '__main__':
     # Set up command-line argument parsing
@@ -108,11 +124,10 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    # Example log entry using logging
-    logging.info('This is logging.info')
-
     if not args.urls:
-        print('No URLs provided. Example usage:')
-        print('  python script.py https://example.com https://example.org')
+        args.urls = ['https://djdinnebeil.github.io']
+        main(args.urls, top_n=args.top, processes=args.processes)
     else:
         main(args.urls, top_n=args.top, processes=args.processes)
+
+    logger.info('End of program')
