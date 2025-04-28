@@ -1,6 +1,6 @@
 import os
 import pytest
-from tasks import TaskList, EmptyTaskError, TaskAlreadyExistsError, TaskNotFoundError
+from task_list import TaskList, EmptyTaskError, TaskAlreadyExistsError, TaskNotFoundError
 
 # --- Fixtures ---
 
@@ -24,59 +24,65 @@ def temp_json_file():
 # --- Functional Tests ---
 
 def test_add_normal_task(task_list):
-    result = task_list.add_task("Walk the dog")
-    assert result == "Task Walk the dog added."
-    assert "Walk the dog" in task_list.list_tasks()
+    result = task_list.add_task('Walk the dog')
+    assert result == 'Task Walk the dog added.'
+    assert 'Walk the dog' in task_list.list_tasks()
+
+def test_add_long_task(task_list):
+    result = task_list.add_task('a' * (task_list.max_length + 1))
+    target = 'a' * task_list.max_length
+    assert result == f'Task {target} added.'
+    assert target in task_list.list_tasks()
 
 def test_add_empty_task(task_list):
     with pytest.raises(EmptyTaskError):
-        task_list.add_task("")
+        task_list.add_task('')
 
 def test_add_duplicate_task(task_list):
-    task_list.add_task("Read book")
-    result = task_list.add_task("Read book")
-    assert result == "Task Read book added."
-    assert task_list.list_tasks().count("Read book") == 2
+    task_list.add_task('Read book')
+    result = task_list.add_task('Read book')
+    assert result == 'Task Read book added.'
+    assert task_list.list_tasks().count('Read book') == 2
 
 def test_add_unique_duplicate_task(task_list):
-    task_list.add_unique_task("Go running")
+    task_list.add_unique_task('Go running')
     with pytest.raises(TaskAlreadyExistsError):
-        task_list.add_unique_task("Go running")
-    assert task_list.list_tasks().count("Go running") == 1
+        task_list.add_unique_task('Go running')
+    assert task_list.list_tasks().count('Go running') == 1
 
 def test_remove_existing_task(task_list):
-    task_list.add_task("Call Mom")
-    result = task_list.remove_task("Call Mom")
-    assert result == "Task Call Mom removed."
-    assert "Call Mom" not in task_list.list_tasks()
+    task_list.add_task('Call Mom')
+    result = task_list.remove_task('Call Mom')
+    assert result == 'Task Call Mom removed.'
+    assert 'Call Mom' not in task_list.list_tasks()
 
 def test_remove_nonexisting_task(task_list):
     with pytest.raises(TaskNotFoundError):
-        task_list.remove_task("Do homework")
+        task_list.remove_task('Do homework')
 
 def test_list_tasks_after_adding(task_list):
-    task_list.add_task("Cook dinner")
-    task_list.add_task("Wash dishes")
+    task_list.add_task('Cook dinner')
+    task_list.add_task('Wash dishes')
     listed_tasks = task_list.list_tasks()
-    assert "Cook dinner" in listed_tasks
-    assert "Wash dishes" in listed_tasks
+    assert 'Cook dinner' in listed_tasks
+    assert 'Wash dishes' in listed_tasks
 
 def test_list_tasks_after_removing(task_list):
-    task_list.add_task("Go shopping")
-    task_list.remove_task("Go shopping")
+    task_list.add_task('Go shopping')
+    task_list.remove_task('Go shopping')
     listed_tasks = task_list.list_tasks()
-    assert "Go shopping" not in listed_tasks
+    assert 'Go shopping' not in listed_tasks
 
 def test_special_character_task(task_list):
-    result = task_list.add_task("Buy milk 🥛🍞")
-    assert result == "Task Buy milk 🥛🍞 added."
-    assert "Buy milk 🥛🍞" in task_list.list_tasks()
+    result = task_list.add_task('Buy milk 🥛🍞')
+    assert result == 'Task Buy milk 🥛🍞 added.'
+    assert 'Buy milk 🥛🍞' in task_list.list_tasks()
 
 def test_list_tasks_copy_is_safe(task_list):
-    task_list.add_task("Task1")
+    task_list.add_task('Task1')
     copied_list = task_list.list_tasks()
-    copied_list += ("Fake task",)  # Modify the copy
-    assert "Fake task" not in task_list.list_tasks(), "Original list modified!"
+    copied_list += ('Fake task',)  # Modify the copy
+    assert 'Fake task' not in task_list.list_tasks(), 'Original list modified!'
 
 # --- Persistence Tests ---
 
