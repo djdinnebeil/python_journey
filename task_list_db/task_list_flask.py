@@ -75,7 +75,7 @@ def completed_tasks():
 def all_tasks():
     with TaskList(db_path) as tasks:
         all_tasks = tasks.list_all_tasks()
-    return "<h1>All Tasks</h1>" + "<br>".join(all_tasks) + "<br><a href='/'>Back</a>"
+    return "<h1>All Tasks</h1>" + "<br>".join(f"{task} (created at {created_at})" for task, created_at in all_tasks) + "<br><a href='/'>Back</a>"
 
 if __name__ == '__main__':
     app.run(debug=True)

@@ -35,8 +35,10 @@ class TaskList:
         self.close()
 
     def close(self) -> None:
-        """Manually close the database connection."""
-        self._conn.close()
+        """Safely close the database connection."""
+        if self._conn:
+            self._conn.close()
+            self._conn = None
 
     def _initialize_db(self) -> None:
         """Create tasks table if it doesn't exist."""
@@ -67,10 +69,10 @@ class TaskList:
         return f'Task \"{task}\" added.'
 
     def remove_task(self, task: str) -> str:
-        """Remove the first matching pending task."""
+        """Soft-delete the first matching pending task."""
         task = self._normalize_task(task)
         if not task:
-            return 'Cannot complete an empty task.'
+            return 'Cannot remove an empty task.'
         with self._conn:
             row = self._conn.execute('''
                 SELECT id FROM tasks WHERE task = ? AND completed = 0
@@ -108,10 +110,51 @@ class TaskList:
             else:
                 return 'No pending task found to complete.'
 
-    def clear_tasks(self) -> None:
-        """Remove all tasks."""
+    def clear_tasks(self) -> int:
+        """Soft-deletes tasks from the database. Returns number of tasks affected."""
         with self._conn:
-            self._conn.execute('DELETE FROM tasks')
+            result = self._conn.execute('''
+                UPDATE tasks
+                SET deleted_at = CURRENT_TIMESTAMP
+                WHERE deleted_at IS NULL
+            ''')
+            return result.rowcount
+
+    def delete_task(self, task: str) -> str:
+        """Hard delete the first matching pending task."""
+        task = self._normalize_task(task)
+        with self._conn:
+            row = self._conn.execute(
+                'SELECT id FROM tasks WHERE task = ? AND completed = 0 LIMIT 1', (task,)
+            ).fetchone()
+            if row:
+                self._conn.execute('DELETE FROM tasks WHERE id = ?', (row['id'],))
+                return f'Task "{task}" permanently deleted.'
+            return 'No pending task found to delete.'
+
+    def purge_tasks(self, confirm: bool = False, compact: bool = False) -> int:
+        """
+        Permanently deletes all tasks from the database.
+
+        Args:
+            confirm (bool): Required to execute deletion. If False, no action is taken.
+            compact (bool): If True, runs VACUUM after deletion to shrink and defragment the database file.
+
+        Returns:
+            int: The number of tasks deleted.
+
+        Notes:
+            - This method bypasses soft-deletion and removes all records from the tasks table.
+            - VACUUM can be time-consuming on large databases and must run outside a transaction.
+        """
+        if not confirm:
+            return 0
+        with self._conn:
+            result = self._conn.execute('DELETE FROM tasks')
+        if compact:
+            self._conn.execute('VACUUM')
+        logging.info(f'Purged {result.rowcount} tasks from database {self._db_path}')
+        return result.rowcount
 
     def _list_tasks_by_status(self, completed: int) -> tuple[str, ...]:
         """
@@ -144,12 +187,65 @@ class TaskList:
 
     def list_all_tasks(self, include_deleted: bool = False) -> tuple[tuple[str, str], ...]:
         """Return a tuple of all task descriptions (pending and completed)."""
+        # Alternate version
+        # if include_deleted:
+        #     query = 'SELECT task, created_at FROM tasks ORDER BY id ASC'
+        #     rows = self._conn.execute(query).fetchall()
+        # else:
+        #     query = 'SELECT task, created_at FROM tasks WHERE deleted_at IS NULL ORDER BY id ASC'
+        #     rows = self._conn.execute(query).fetchall()
+        # return tuple((row['task'], row['created_at']) for row in rows)
         rows = self._conn.execute('''
-            SELECT task, created_at, deleted_at FROM tasks
+            SELECT task, created_at FROM tasks
             WHERE (? OR deleted_at IS NULL)
             ORDER BY id ASC
         ''', (include_deleted,)).fetchall()
-        return tuple((row['task'], row['created_at'], row['deleted_at']) for row in rows)
+        return tuple((row['task'], row['created_at']) for row in rows)
+
+    def search_tasks(self, keyword: str) -> tuple[str, ...]:
+        """
+        Search for tasks containing the specified keyword (case-insensitive).
+
+        This method performs a substring search against the task description using
+        SQL's LIKE operator. Matches are case-insensitive by default and exclude any
+        tasks that have been soft-deleted (i.e., where deleted_at is not null).
+
+        Args:
+            keyword (str): The keyword to search for within task descriptions.
+
+        Returns:
+            tuple[str, ...]: A tuple of task descriptions matching the keyword, ordered by creation time.
+
+        Notes:
+            - By default, the LIKE operator in SQLite is case-insensitive for ASCII.
+            - To make the search case-sensitive, add 'COLLATE BINARY' to the WHERE clause:
+                WHERE task LIKE ? COLLATE BINARY AND deleted_at IS NULL
+        """
+        query = '''
+            SELECT task FROM tasks
+            WHERE task LIKE ? AND deleted_at IS NULL
+            ORDER BY created_at
+        '''
+        rows = self._conn.execute(query, (f'%{keyword}%',)).fetchall()
+        return tuple(row['task'] for row in rows)
+
+    def search_tasks_case_sensitive(self, pattern: str) -> tuple[str, ...]:
+        """
+        Case-sensitive search using GLOB pattern matching.
+
+        Args:
+            pattern (str): A GLOB-style pattern (e.g., '*cat*', '?og').
+
+        Returns:
+            tuple[str, ...]: A tuple of task descriptions matching the pattern.
+        """
+        query = '''
+            SELECT task FROM tasks
+            WHERE task GLOB ? AND deleted_at IS NULL
+            ORDER BY created_at
+        '''
+        rows = self._conn.execute(query, (pattern,)).fetchall()
+        return tuple(row['task'] for row in rows)
 
     def _normalize_task(self, task: str) -> str:
         """Normalize input by trimming and limiting task length."""
@@ -162,25 +258,9 @@ class TaskList:
         """Return a string representation showing count of pending and completed tasks."""
         return f'<TaskList pending={len(self.list_pending_tasks())} completed={len(self.list_completed_tasks())}>'
 
-
 if __name__ == '__main__':
-    with TaskList('tasks.db') as tasks:
-        tasks.add_task('Buy milk')
-        tasks.add_task('Buy milk')
-        tasks.add_task('Walk dog')
-
-        print("Pending:", tasks.list_pending_tasks())
-
-        tasks.complete_task('Buy milk')
-        print("After completing one 'Buy milk':")
-        print("Pending:", tasks.list_pending_tasks())
-        print("Completed:", tasks.list_completed_tasks())
-
-        tasks.remove_task('Walk dog')
-        print("After removing 'Walk dog':")
-        print("Pending:", tasks.list_pending_tasks())
-
-        print('---')
-        print(tasks.list_all_tasks(True))
-        print(tasks)
-
+    with TaskList(':memory:') as t:
+        t.add_task('Alpha cat')
+        t.add_task('Beta cat')
+        t.add_task('Gamma ray')
+        print(t.search_tasks_case_sensitive('alpha'))
