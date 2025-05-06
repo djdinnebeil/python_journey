@@ -163,7 +163,6 @@ def test_repr_reflects_state(task_list):
     task_list.complete_task('One')
     assert repr(task_list) == '<TaskList pending=1 completed=1>'
 
-
 def test_data_persists_across_connections(tmp_path):
     """Test that data added in one connection persists to the next."""
     db_file = tmp_path / 'persist_test.db'
@@ -173,3 +172,82 @@ def test_data_persists_across_connections(tmp_path):
 
     with TaskList(str(db_file)) as tl2:
         assert 'Persistent Task' in tl2.list_pending_tasks()
+
+# --- Search Functionality ---
+
+def test_search_tasks_like_case_insensitive(task_list):
+    """Test case-insensitive substring search using LIKE."""
+    task_list.add_task('Alpha Cat')
+    task_list.add_task('Beta dog')
+    task_list.add_task('Gamma Ray')
+
+    results = task_list.search_tasks('cat')
+    assert 'Alpha Cat' in results
+    assert 'Beta dog' not in results
+
+def test_search_tasks_like_empty_query(task_list):
+    """Search with empty string should return all undeleted tasks."""
+    task_list.add_task('One')
+    task_list.add_task('Two')
+    results = task_list.search_tasks('')
+    assert 'One' in results
+    assert 'Two' in results
+
+def test_search_tasks_like_soft_deleted(task_list):
+    """Ensure soft-deleted tasks are excluded from LIKE results."""
+    task_list.add_task('Zombie')
+    task_list.remove_task('Zombie')
+    assert 'Zombie' not in task_list.search_tasks('Zombie')
+
+def test_search_tasks_glob_case_sensitive_match(task_list):
+    """Test case-sensitive search using GLOB pattern matching."""
+    task_list.add_task('Alpha Cat')
+    task_list.add_task('alpha cat')
+    results = task_list.search_tasks('Cat', case_sensitive=True)
+    assert 'Alpha Cat' in results
+    assert 'alpha cat' not in results
+
+def test_search_tasks_glob_no_match(task_list):
+    """GLOB search should return empty if case doesn't match."""
+    task_list.add_task('alpha cat')
+    assert task_list.search_tasks('Cat', case_sensitive=True) == ()
+
+def test_delete_task_existing(task_list):
+    """Test that delete_task permanently removes a task."""
+    task_list.add_task('Remove Me')
+    result = task_list.delete_task('Remove Me')
+    assert result == 'Task "Remove Me" permanently deleted.'
+    assert 'Remove Me' not in task_list.list_pending_tasks()
+
+def test_delete_task_nonexistent(task_list):
+    """Test delete_task returns appropriate message when task not found."""
+    result = task_list.delete_task('Nonexistent')
+    assert result == 'No pending task found to delete.'
+
+def test_search_tasks_glob_question_and_star(task_list):
+    """Test GLOB wildcards ? and *."""
+    task_list.add_task('Catnap')
+    task_list.add_task('Catch')
+    task_list.add_task('Dog')
+
+    assert 'Catnap' in task_list.search_tasks('Cat?a*', case_sensitive=True)
+    assert 'Catch' in task_list.search_tasks('Cat*', case_sensitive=True)
+    assert 'Dog' not in task_list.search_tasks('Cat*', case_sensitive=True)
+
+def test_search_tasks_like_underscore_wildcard(task_list):
+    """Test LIKE operator with underscore (_) wildcard."""
+    task_list.add_task('Note1')
+    task_list.add_task('Note2')
+    task_list.add_task('Notebook')
+
+    results = task_list.search_tasks('Note_', surround_wildcards=False)
+    assert 'Note1' in results
+    assert 'Note2' in results
+    assert 'Notebook' not in results
+
+def test_purge_tasks_with_compact_flag(task_list):
+    """Test purge_tasks with compact=True triggers VACUUM cleanly."""
+    task_list.add_task('Temporary Task')
+    result = task_list.purge_tasks(confirm=True, compact=True)
+    assert result == 1
+    assert task_list.list_pending_tasks() == ()

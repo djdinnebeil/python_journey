@@ -20,7 +20,8 @@ class TaskList:
         self._max_length = max_length
         try:
             self._conn = sqlite3.connect(self._db_path)
-            self._conn.row_factory = sqlite3.Row # See note at the top
+            self._conn.row_factory = sqlite3.Row            # See note at the top
+            self._conn.execute('PRAGMA journal_mode = WAL')
         except sqlite3.Error as e:
             raise RuntimeError(f"Failed to connect to database: {e}")
 
@@ -202,48 +203,51 @@ class TaskList:
         ''', (include_deleted,)).fetchall()
         return tuple((row['task'], row['created_at']) for row in rows)
 
-    def search_tasks(self, keyword: str) -> tuple[str, ...]:
+    def search_tasks(self, keyword: str, *, case_sensitive: bool = False, surround_wildcards: bool = True) -> tuple[str, ...]:
         """
-        Search for tasks containing the specified keyword (case-insensitive).
-
-        This method performs a substring search against the task description using
-        SQL's LIKE operator. Matches are case-insensitive by default and exclude any
-        tasks that have been soft-deleted (i.e., where deleted_at is not null).
+        Search for tasks containing the specified keyword.
 
         Args:
-            keyword (str): The keyword to search for within task descriptions.
+            keyword (str): The search keyword or pattern.
+            case_sensitive (bool): If True, performs a case-sensitive match using GLOB.
+                                   If False, performs a case-insensitive match using LIKE.
+            surround_wildcards (bool): If True, wraps pattern with wildcards (* or %) to match substrings.
 
         Returns:
-            tuple[str, ...]: A tuple of task descriptions matching the keyword, ordered by creation time.
+            tuple[str, ...]: Matching task names ordered by creation time.
+
+        Wildcard Behavior:
+            - When case_sensitive is False (default), the query uses the LIKE operator:
+                - '%' matches zero or more characters.
+                - '_' matches exactly one character.
+                - LIKE is case-insensitive by default in SQLite.
+
+            - When case_sensitive is True, the query uses the GLOB operator:
+                - '*' matches zero or more characters.
+                - '?' matches exactly one character.
+                - GLOB is always case-sensitive and does not support escaping.
+                - Bracket patterns like [a-z] and [^A] are also supported.
 
         Notes:
-            - By default, the LIKE operator in SQLite is case-insensitive for ASCII.
-            - To make the search case-sensitive, add 'COLLATE BINARY' to the WHERE clause:
-                WHERE task LIKE ? COLLATE BINARY AND deleted_at IS NULL
+            - GLOB and LIKE use different wildcard syntaxes. Ensure your input pattern uses the correct style.
+            - Soft-deleted tasks (those with deleted_at set) are excluded from search results.
         """
-        query = '''
-            SELECT task FROM tasks
-            WHERE task LIKE ? AND deleted_at IS NULL
-            ORDER BY created_at
-        '''
-        rows = self._conn.execute(query, (f'%{keyword}%',)).fetchall()
-        return tuple(row['task'] for row in rows)
+        if case_sensitive:
+            # Convert to GLOB-style pattern: '*' instead of '%'
+            pattern = f'*{keyword}*' if surround_wildcards else keyword
+            query = '''
+                SELECT task FROM tasks
+                WHERE task GLOB ? AND deleted_at IS NULL
+                ORDER BY created_at
+            '''
+        else:
+            pattern = f'%{keyword}%' if surround_wildcards else keyword
+            query = '''
+                SELECT task FROM tasks
+                WHERE task LIKE ? AND deleted_at IS NULL
+                ORDER BY created_at
+            '''
 
-    def search_tasks_case_sensitive(self, pattern: str) -> tuple[str, ...]:
-        """
-        Case-sensitive search using GLOB pattern matching.
-
-        Args:
-            pattern (str): A GLOB-style pattern (e.g., '*cat*', '?og').
-
-        Returns:
-            tuple[str, ...]: A tuple of task descriptions matching the pattern.
-        """
-        query = '''
-            SELECT task FROM tasks
-            WHERE task GLOB ? AND deleted_at IS NULL
-            ORDER BY created_at
-        '''
         rows = self._conn.execute(query, (pattern,)).fetchall()
         return tuple(row['task'] for row in rows)
 
@@ -258,9 +262,10 @@ class TaskList:
         """Return a string representation showing count of pending and completed tasks."""
         return f'<TaskList pending={len(self.list_pending_tasks())} completed={len(self.list_completed_tasks())}>'
 
+
 if __name__ == '__main__':
-    with TaskList(':memory:') as t:
-        t.add_task('Alpha cat')
-        t.add_task('Beta cat')
-        t.add_task('Gamma ray')
-        print(t.search_tasks_case_sensitive('alpha'))
+    with TaskList(':memory:') as task_list:
+        task_list.add_task('Note1')
+        task_list.add_task('Note2')
+        task_list.add_task('Notebook')
+        print(task_list.search_tasks('Note_', case_sensitive=False, surround_wildcards=False))

@@ -140,6 +140,46 @@ class TestTaskList(unittest.TestCase):
         self.task_list.complete_task('One')
         self.assertEqual(repr(self.task_list), '<TaskList pending=1 completed=1>')
 
+    # --- Search Functionality ---
+
+    def test_search_tasks_like_case_insensitive(self):
+        """Test case-insensitive substring search using LIKE."""
+        self.task_list.add_task('Alpha Cat')
+        self.task_list.add_task('Beta dog')
+        self.task_list.add_task('Gamma Ray')
+
+        results = self.task_list.search_tasks('cat')
+        self.assertIn('Alpha Cat', results)
+        self.assertNotIn('Beta dog', results)
+
+    def test_search_tasks_like_empty_query(self):
+        """Search with empty string should return all undeleted tasks."""
+        self.task_list.add_task('One')
+        self.task_list.add_task('Two')
+        results = self.task_list.search_tasks('')
+        self.assertIn('One', results)
+        self.assertIn('Two', results)
+
+    def test_search_tasks_like_soft_deleted(self):
+        """Ensure soft-deleted tasks are excluded from LIKE results."""
+        self.task_list.add_task('Zombie')
+        self.task_list.remove_task('Zombie')
+        results = self.task_list.search_tasks('Zombie')
+        self.assertNotIn('Zombie', results)
+
+    def test_search_tasks_glob_case_sensitive_match(self):
+        """Test case-sensitive search using GLOB pattern matching."""
+        self.task_list.add_task('Alpha Cat')
+        self.task_list.add_task('alpha cat')
+        results = self.task_list.search_tasks('Cat', case_sensitive=True)
+        self.assertIn('Alpha Cat', results)
+        self.assertNotIn('alpha cat', results)
+
+    def test_search_tasks_glob_no_match(self):
+        """GLOB search should return empty if case doesn't match."""
+        self.task_list.add_task('alpha cat')
+        results = self.task_list.search_tasks('Cat', case_sensitive=True)
+        self.assertEqual(results, ())
 
 if __name__ == '__main__':
     unittest.main()
