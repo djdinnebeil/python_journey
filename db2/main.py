@@ -2,7 +2,6 @@
 from crud import add_user, get_user, add_product, get_product, add_order, add_order_item, get_all_products, delete_user
 from crud import get_all_users
 # from db_config import Base, engine
-from sqlalchemy.orm import sessionmaker
 
 from crud import delete_user
 from db_config import set_session
@@ -16,8 +15,8 @@ print(get_user(1))
 print(get_user(2))
 
 # Add products
-add_product("Laptop", 1200)
-add_product("Phone", 700)
+add_product('Laptop', 1200)
+add_product('Phone', 700)
 
 # Get and display products
 print(get_product(1))

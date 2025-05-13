@@ -87,7 +87,6 @@ def add_order(user_id):
         session.flush()  # Assigns new_order.id
         return new_order.id  # ✅ just the integer ID
 
-
 def add_order_item(order_id, product_id, quantity):
     """Add an item to an order with specified quantity."""
     with session_scope() as session:
