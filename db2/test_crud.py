@@ -1,6 +1,4 @@
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 from sqlalchemy.future import select
 from models import Base, User, Product, Order, OrderItem
 from crud import get_all_users, add_user, get_user, add_product, get_product, add_order, add_order_item, delete_user

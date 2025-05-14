@@ -1,9 +1,10 @@
 """CRUD operations for the ecommerce database models."""
-
 from db_config import session_scope
 from models import User, Product, Order, OrderItem
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select
+from sqlalchemy import func
+from collections import defaultdict
 
 # User CRUD
 def add_user(name, email):
@@ -93,3 +94,62 @@ def add_order_item(order_id, product_id, quantity):
         new_item = OrderItem(order_id=order_id, product_id=product_id, quantity=quantity)
         session.add(new_item)
         return f'Added product {product_id} to order {order_id}.'
+
+# Coursera challenges
+def get_user_orders(user_id):
+    """Retrieve all orders and items (with quantities) for a given user."""
+    with session_scope() as session:
+        stmt = (
+            select(OrderItem)
+            .join(Order)
+            .join(Product)
+            .where(Order.user_id == user_id)
+        )
+        result = session.execute(stmt).scalars().all()
+
+        return [
+            {
+                'order_id': item.order_id,
+                'product': item.product.name,
+                'quantity': item.quantity
+            }
+            for item in result
+        ]
+
+def get_total_quantity_per_product():
+    """Aggregate the total quantity ordered per product."""
+    with session_scope() as session:
+        stmt = (
+            select(Product.name, func.sum(OrderItem.quantity).label('total_quantity'))
+            .join(OrderItem, Product.id == OrderItem.product_id)
+            .group_by(Product.id)
+        )
+        result = session.execute(stmt).all()
+
+        return [{'product': name, 'total_quantity': quantity} for name, quantity in result]
+
+def get_user_orders_grouped(user_id):
+    """Retrieve all orders and their items (with quantities) for a given user, grouped by order_id."""
+    with session_scope() as session:
+        stmt = (
+            select(OrderItem)
+            .join(Order)
+            .join(Product)
+            .where(Order.user_id == user_id)
+        )
+        order_items = session.execute(stmt).scalars().all()
+
+        grouped = defaultdict(list)
+        for item in order_items:
+            grouped[item.order_id].append({
+                'product': item.product.name,
+                'quantity': item.quantity
+            })
+
+        return [
+            {
+                'order_id': order_id,
+                'items': items
+            }
+            for order_id, items in grouped.items()
+        ]
