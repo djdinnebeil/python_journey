@@ -1,0 +1,8 @@
+2025-05-15 14:10:55,119 - my_app - INFO - App started
+2025-05-15 14:10:55,119 - my_app - DEBUG - Attempting to divide 10 by 2
+2025-05-15 14:10:55,120 - my_app - INFO - Division successful: 10 / 2 = 5.0
+2025-05-15 14:10:55,120 - my_app - DEBUG - Attempting to divide 5 by 0
+2025-05-15 14:10:55,120 - my_app - ERROR - Division failed: division by zero
+2025-05-15 14:10:55,121 - my_app - WARNING - This is a warning example.
+2025-05-15 14:10:55,121 - my_app - CRITICAL - This is a critical message.
+2025-05-15 14:10:55,121 - my_app - INFO - App finished

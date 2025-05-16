@@ -8,7 +8,7 @@ from multiprocessing import Pool
 import logging
 import sys
 
-# Configure basic logging format and level
+# Configure basic logging_python format and level
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
