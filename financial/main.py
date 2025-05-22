@@ -102,8 +102,8 @@ try:
     if foreign_company:
         foreign_company.run_analysis_pipeline(conn)
     else:
-        print("Foreign company not found")
+        print('Foreign company not found')
 except Exception as e:
-    print(f"Error processing domestic company: {e}")
+    print(f'Error processing domestic company: {e}')
 
 DatabaseConnection.close_connection()
