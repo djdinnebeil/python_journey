@@ -33,7 +33,7 @@ app.add_middleware(
 class ChatRequest(BaseModel):
     developer_message: str  # Message from the developer/system
     user_message: str  # Message from the user
-    model: Optional[str] = "gpt-4.1-nano"  # Optional model selection with default
+    model: Optional[str] = "gpt-4.1-mini"  # Optional model selection with default
     api_key: str = os.getenv('OPENAI_API_KEY')  # OpenAI API key for authentication
 
 
@@ -67,6 +67,106 @@ async def chat(request: ChatRequest):
     except Exception as e:
         # Handle any errors that occur during processing
         raise HTTPException(status_code=500, detail=str(e))
+
+
+from fastapi import Form
+
+@app.post("/api/chat/form")
+async def chat_form(
+    developer_message: str = Form(...),
+    user_message: str = Form(...),
+    model: str = Form("gpt-4.1-nano"),
+    api_key: str = Form(os.getenv("OPENAI_API_KEY"))
+):
+    try:
+        client = OpenAI(api_key=api_key)
+
+        async def generate():
+            stream = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "developer", "content": developer_message},
+                    {"role": "user", "content": user_message}
+                ],
+                stream=True
+            )
+            for chunk in stream:
+                if chunk.choices[0].delta.content is not None:
+                    print(chunk.choices[0].delta.content)
+                    yield chunk.choices[0].delta.content
+
+        return StreamingResponse(generate(), media_type="text/plain")
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+from fastapi.responses import HTMLResponse
+
+
+@app.get("/")
+async def root():
+    return HTMLResponse("""
+    <!DOCTYPE html>
+    <html>
+    <head><title>Chat Form</title></head>
+    <body>
+      <h2>Chat with OpenAI</h2>
+      <form id="chat-form">
+        <label>System Message:</label><br>
+        <input name="developer_message" value="You are a helpful assistant."><br><br>
+
+        <label>User Message:</label><br>
+        <input name="user_message" value="What is the capital of France?"><br><br>
+
+        <label>Model (optional):</label><br>
+        <input name="model" value="gpt-4.1-nano"><br><br>
+
+        <label>API Key (optional):</label><br>
+        <input name="api_key"><br><br>
+
+        <button type="submit">Send</button>
+      </form>
+
+      <h3>Response:</h3>
+      <pre id="response"></pre>
+
+      <script>
+        const form = document.getElementById("chat-form");
+        const responseBox = document.getElementById("response");
+
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          responseBox.textContent = "";
+
+          const formData = new FormData(form);
+          const params = new URLSearchParams();
+          for (const [key, value] of formData.entries()) {
+            params.append(key, value);
+          }
+
+          const response = await fetch("/api/chat/form", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded"
+            },
+            body: params
+          });
+
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder("utf-8");
+
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+                responseBox.textContent += decoder.decode(value, { stream: true });
+          }
+        });
+      </script>
+    </body>
+    </html>
+    """)
+
 
 
 # Define a health check endpoint to verify API status
