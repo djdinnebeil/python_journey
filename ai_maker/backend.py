@@ -14,8 +14,6 @@ import os
 
 dotenv.load_dotenv()
 
-api_key = os.getenv('OPENAI_API_KEY')
-
 # Initialize FastAPI application with a title
 app = FastAPI(title="OpenAI Chat API")
 
@@ -36,7 +34,7 @@ class ChatRequest(BaseModel):
     developer_message: str  # Message from the developer/system
     user_message: str  # Message from the user
     model: Optional[str] = "gpt-4.1-nano"  # Optional model selection with default
-    api_key: str = api_key  # OpenAI API key for authentication
+    api_key: str = os.getenv('OPENAI_API_KEY')  # OpenAI API key for authentication
 
 
 # Define the main chat endpoint that handles POST requests
