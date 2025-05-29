@@ -5,8 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 # Import Pydantic for data validation and settings management
 from pydantic import BaseModel
 # Import OpenAI client for interacting with OpenAI's API
-from openai import OpenAI
-
+from openai import OpenA
 from typing import Optional
 
 import dotenv
