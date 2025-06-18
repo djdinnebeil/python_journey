@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 # Import Pydantic for data validation and settings management
 from pydantic import BaseModel
 # Import OpenAI client for interacting with OpenAI's API
-from openai import OpenA
+from openai import OpenAI
 from typing import Optional
 
 import dotenv
@@ -43,7 +43,7 @@ async def chat(request: ChatRequest):
         # Initialize OpenAI client with the provided API key
         client = OpenAI(api_key=request.api_key)
 
-        # Create an async generator function for streaming responses
+        # Create an async_io generator function for streaming responses
         async def generate():
             # Create a streaming chat completion request
             stream = client.chat.completions.create(
@@ -134,7 +134,7 @@ async def root():
         const form = document.getElementById("chat-form");
         const responseBox = document.getElementById("response");
 
-        form.addEventListener("submit", async (event) => {
+        form.addEventListener("submit", async_io (event) => {
           event.preventDefault();
           responseBox.textContent = "";
 
